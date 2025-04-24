@@ -28,3 +28,42 @@ class DNSResolver:
             
         # If resolution is already in progress, return the IP for now
         if ip in self.pending_futures:
+            return ip
+            
+        # Start asynchronous resolution
+        future = self.executor.submit(self._resolve_dns, ip)
+        self.pending_futures[ip] = future
+        return ip
+        
+    def _resolve_dns(self, ip: str) -> str:
+        """Perform actual DNS resolution"""
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+            self.cache[ip] = hostname
+            return hostname
+        except Exception:
+            self.cache[ip] = ip  # Cache failures too
+            return ip
+            
+    def update_cache(self) -> None:
+        """Check for completed DNS resolutions and update cache"""
+        completed = [ip for ip, future in list(self.pending_futures.items()) 
+                    if future.done()]
+                     
+        for ip in completed:
+            future = self.pending_futures.pop(ip)
+            try:
+                # Update cache with resolved hostname
+                hostname = future.result()
+                self.cache[ip] = hostname
+            except Exception:
+                # On failure, cache the IP itself
+                self.cache[ip] = ip
+                
+    def format_addr(self, ip: str, port: int) -> str:
+        """Format an address as hostname:port"""
+        return f"{self.resolve(ip)}:{port}"
+        
+    def shutdown(self) -> None:
+        """Clean shutdown of the executor"""
+        self.executor.shutdown(wait=False)

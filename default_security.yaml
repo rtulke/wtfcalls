@@ -1,0 +1,73 @@
+# WTFCalls default security configuration
+# This file contains the default security rules used by WTFCalls.
+# You can customize these rules or add your own.
+
+# Known malicious IP addresses (example)
+malicious_ips:
+  - 192.0.2.1    # Example - add real malicious IPs here
+  - 198.51.100.1 # Example - add real malicious IPs here
+
+# Suspicious ports that are commonly used by malware
+suspicious_ports:
+  # Common backdoor ports
+  - 31337  # Back Orifice
+  - 1337   # Common l33t port used by hackers
+  - 4444   # Metasploit default
+  - 5555   # Android Debug Bridge
+  
+  # Tor related
+  - 9050   # Default Tor SOCKS port
+  - 9051   # Default Tor control port
+  
+  # Common ports used by trojans
+  - 6667   # IRC, often used for botnet C&C
+  - 6668   # IRC
+  - 6669   # IRC
+  - 8080   # Alternative HTTP, sometimes used for proxies/C&C
+  - 8888   # Alternative HTTP
+  - 8443   # Alternative HTTPS
+  
+  # BitTorrent related (might be legitimate but suspicious in some contexts)
+  - 6881   # BitTorrent
+  - 6882   # BitTorrent
+  - 6883   # BitTorrent
+  - 6884   # BitTorrent
+  - 6885   # BitTorrent
+  
+# Trusted processes - these are ignored by security rules
+trusted_processes:
+  - firefox
+  - chrome
+  - Safari
+  - Edge
+  - Opera
+  - brave
+  - apt
+  - apt-get
+  - brew
+
+# Trusted connections (process + remote IP)
+trusted_connections:
+  - process: python3
+    ip: 127.0.0.1
+  - process: python
+    ip: 127.0.0.1
+
+# Custom rules
+custom_rules:
+  - name: "Non-standard shell port connection"
+    description: "Shell connecting to port outside common ranges"
+    condition: "(conn.process_name in ['bash', 'sh', 'zsh', 'fish']) and (conn.rp > 1024 and conn.rp not in [3306, 5432, 27017, 6379, 8080, 8443])"
+    threat_level: 1
+    exceptions: ["ssh", "rsync", "curl", "wget"]
+
+  - name: "High-port scanning"
+    description: "Process connecting to high ports in sequence"
+    condition: "conn.rp > 50000"
+    threat_level: 1
+    exceptions: ["firefox", "chrome", "chromium", "safari", "brave", "torrent", "transmission"]
+
+  - name: "Unusual remote port for common service"
+    description: "Connection to service on non-standard port"
+    condition: "(conn.rp % 1000 == 22 or conn.rp % 1000 == 23 or conn.rp % 1000 == 3389) and (conn.rp != 22 and conn.rp != 23 and conn.rp != 3389)"
+    threat_level: 1

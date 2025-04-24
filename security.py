@@ -10,6 +10,9 @@ import time
 import logging
 from typing import Dict, List, Tuple, Set
 
+# Setup custom logger instead of using root logger
+logger = logging.getLogger("wtfcalls.security")
+
 # Check for optional dependencies
 try:
     import yaml
@@ -109,12 +112,12 @@ class ThreatIntelligence:
                     if yaml_available:
                         config = yaml.safe_load(f)
                     else:
-                        logging.warning("PyYAML ist erforderlich für YAML-Konfigurationsdateien")
+                        logger.warning("PyYAML ist erforderlich für YAML-Konfigurationsdateien")
                         return
                 elif config_path.endswith('.json'):
                     config = json.load(f)
                 else:
-                    logging.warning(f"Nicht unterstütztes Konfigurationsformat: {config_path}")
+                    logger.warning(f"Nicht unterstütztes Konfigurationsformat: {config_path}")
                     return
             
             # Load malicious IPs
@@ -154,10 +157,10 @@ class ThreatIntelligence:
                                 'exceptions': rule.get('exceptions', [])
                             })
                         except Exception as e:
-                            logging.warning(f"Fehler beim Parsen der Regelbedingung: {str(e)}")
+                            logger.warning(f"Fehler beim Parsen der Regelbedingung: {str(e)}")
         
         except Exception as e:
-            logging.warning(f"Fehler beim Laden der Sicherheitskonfiguration: {str(e)}")
+            logger.warning(f"Fehler beim Laden der Sicherheitskonfiguration: {str(e)}")
     
     def _is_private_ip(self, ip: str) -> bool:
         """Check if IP address is in private range"""
@@ -196,7 +199,8 @@ class ThreatIntelligence:
     def _is_browser_or_known_http_client(self, process_name: str) -> bool:
         """Check if process is a known browser or HTTP client"""
         browsers = {'chrome', 'firefox', 'safari', 'opera', 'edge', 'brave', 'vivaldi', 
-                    'wget', 'curl', 'httpie', 'requests', 'http', 'browser'}
+                    'wget', 'curl', 'httpie', 'requests', 'http', 'browser',
+                    'google', 'claude', 'chatgpt', 'code'}
         
         process_lower = process_name.lower()
         
@@ -254,10 +258,12 @@ class ThreatIntelligence:
         """
         # Skip trusted processes
         if conn.process_name in self.trusted_processes:
+            conn.notes = "Trusted process"
             return
             
         # Skip trusted connections
         if (conn.process_name, conn.rip) in self.trusted_connections:
+            conn.notes = "Trusted connection"
             return
         
         # Apply all rules
@@ -276,7 +282,7 @@ class ThreatIntelligence:
                     triggered_rules.append(rule['name'])
                     max_threat_level = max(max_threat_level, rule['threat_level'])
             except Exception as e:
-                logging.debug(f"Rule {rule['name']} evaluation error: {str(e)}")
+                logger.debug(f"Rule {rule['name']} evaluation error: {str(e)}")
         
         # Update connection with results
         conn.threat_level = max_threat_level
@@ -312,11 +318,34 @@ class SecurityMonitor:
     """
     Monitors connections for security issues and provides alerting
     """
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, quiet: bool = False):
         self.threat_intel = ThreatIntelligence(config_path)
         self.alert_history = []
         self.last_check = time.time()
         self.check_interval = 10  # seconds
+        self.quiet = quiet  # Control console logging
+        
+        # Configure logging based on quiet mode
+        self._setup_logging()
+        
+    def _setup_logging(self):
+        """Set up logging configuration"""
+        # Set up file handler for security alerts
+        file_handler = logging.FileHandler("wtfcalls_security.log", mode="a")
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'))
+        logger.addHandler(file_handler)
+        
+        # Set console handler only if not in quiet mode
+        if not self.quiet:
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(logging.Formatter(
+                '[%(levelname)s] %(message)s'))
+            logger.addHandler(console_handler)
+            
+        # Set level
+        logger.setLevel(logging.INFO)
         
     def check_connections(self, connections: Dict) -> List[dict]:
         """
@@ -366,11 +395,11 @@ class SecurityMonitor:
             level = alert['level']
             
             if level == 'critical':
-                logging.critical(alert['message'])
+                logger.critical(alert['message'])
             elif level == 'warning':
-                logging.warning(alert['message'])
+                logger.warning(alert['message'])
             else:
-                logging.info(alert['message'])
+                logger.info(alert['message'])
                 
     def get_recent_alerts(self, seconds: int = 300) -> List[dict]:
         """Get alerts from the last X seconds"""
@@ -416,8 +445,8 @@ class SecurityMonitor:
                             
                         yaml.dump(formatted_alerts, f)
                     else:
-                        logging.error("PyYAML ist erforderlich für YAML-Export")
+                        logger.error("PyYAML ist erforderlich für YAML-Export")
                 else:
-                    logging.error(f"Nicht unterstütztes Exportformat: {format}")
+                    logger.error(f"Nicht unterstütztes Exportformat: {format}")
         except Exception as e:
-            logging.error(f"Fehler beim Exportieren der Alarme: {str(e)}")
+            logger.error(f"Fehler beim Exportieren der Alarme: {str(e)}")

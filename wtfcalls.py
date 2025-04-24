@@ -2,12 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 wtfcalls.py – Main executable for network connection monitoring
+Updated version with filter information displayed above the table
 """
 import argparse
 import signal
 import logging
+import os
+import re
+import ipaddress
 from rich.console import Console
 from rich.live import Live
+from rich import box
+from rich.panel import Panel
+from rich.text import Text
 
 # Import internal modules
 from connection import Connection, EnhancedConnection
@@ -38,15 +45,97 @@ class ConnectionMonitor:
         )
         self.logger = ConnectionLogger(enable=True)
         self.logger.set_dns_resolver(self.dns_resolver)
-        self.collector = ConnectionCollector(self.config)
+        self.collector = EnhancedConnectionCollector(self.config)
         self.table_builder = ConnectionTable(self.config, self.dns_resolver)
         
+        # Security is always enabled now
+        self.security_monitor = SecurityMonitor(
+            self.config.get('security_config'),
+            quiet=self.config.get('quiet', False)
+        )
+        
+        # Traffic monitoring if enabled
+        self.traffic_monitor = TrafficMonitor() if self.config.get('traffic') else None
+        
+        # Connection tracking
         self.active_connections = {}
         self.new_connections = {}
         self.closed_connections = {}
+        self.connection_history = {}  # key -> list of (timestamp, connection)
+        
+        # Process filter arguments
+        self._process_filter_args()
         
         # Set up signal handler for graceful exit
         signal.signal(signal.SIGINT, self._handle_exit)
+        
+    def _process_filter_args(self):
+        """Process and convert filter arguments to the correct format"""
+        # Process filter-port (comma-separated list of ports and port ranges)
+        if self.config.get('filter_port'):
+            port_list = []
+            parts = self.config['filter_port'].split(',')
+            
+            for part in parts:
+                part = part.strip()
+                # Check if it's a range (e.g., "80-90")
+                if '-' in part:
+                    try:
+                        start, end = map(int, part.split('-'))
+                        # Add all ports in the range
+                        port_list.extend(range(start, end + 1))
+                    except ValueError:
+                        continue
+                # Check if it's a single port
+                elif part.isdigit():
+                    port_list.append(int(part))
+            
+            self.config['filter_port'] = port_list
+        
+        # Process filter-ip (comma-separated list of IPs and IP ranges)
+        if self.config.get('filter_ip'):
+            ip_networks = []
+            parts = self.config['filter_ip'].split(',')
+            
+            for part in parts:
+                part = part.strip()
+                try:
+                    # Try to parse as a network (CIDR notation)
+                    if '/' in part:
+                        ip_networks.append(ipaddress.ip_network(part, strict=False))
+                    # Try to parse as a single IP
+                    else:
+                        ip_networks.append(ipaddress.ip_address(part))
+                except ValueError:
+                    continue
+            
+            self.config['filter_ip'] = ip_networks
+        
+        # Process filter-process (comma-separated list of PIDs with possible ranges)
+        if self.config.get('filter_process'):
+            pid_list = []
+            parts = self.config['filter_process'].split(',')
+            
+            for part in parts:
+                part = part.strip()
+                # Check if it's a range (e.g., "1-500")
+                if '-' in part:
+                    try:
+                        start, end = map(int, part.split('-'))
+                        # Add all PIDs in the range
+                        pid_list.extend(range(start, end + 1))
+                    except ValueError:
+                        continue
+                # Check if it's a single PID
+                elif part.isdigit():
+                    pid_list.append(int(part))
+            
+            self.config['filter_process'] = pid_list
+        
+        # Process filter-name (comma-separated list of program names)
+        if self.config.get('filter_name'):
+            names = self.config['filter_name'].split(',')
+            self.config['filter_name'] = [name.strip() for name in names if name.strip()]
         
     def _handle_exit(self, signum, frame):
         """Handle CTRL+C gracefully"""
@@ -84,85 +173,22 @@ class ConnectionMonitor:
         # Update active connections
         self.active_connections = current
         
-        # Update DNS resolutions
-        self.dns_resolver.update_cache()
-        
-    def monitor(self):
-        """Main monitoring loop"""
-        import time
-        console = Console()
-        poll_interval = self.config.get('poll_interval', 1.0)
-        
-        # Get initial connections
-        self.active_connections = self.collector.get_connections()
-        
-        with Live(console=console, refresh_per_second=4) as live:
-            while True:
-                try:
-                    # Update connection data
-                    self._process_connections()
-                    
-                    # Build and update table
-                    table = self.table_builder.build_table(
-                        self.active_connections,
-                        self.new_connections,
-                        self.closed_connections
-                    )
-                    live.update(table)
-                except Exception as e:
-                    console.print(f"[bold red]Error during monitoring: {str(e)}[/bold red]")
-                
-                # Sleep until next poll
-                time.sleep(poll_interval)
-
-
-class EnhancedConnectionMonitor(ConnectionMonitor):
-    """
-    Enhanced version of ConnectionMonitor with additional features
-    """
-    def __init__(self, args: argparse.Namespace):
-        super().__init__(args)
-        
-        # Replace collector with enhanced version
-        self.collector = EnhancedConnectionCollector(self.config)
-        
-        # Add traffic monitoring if enabled
-        self.traffic_monitor = TrafficMonitor() if self.config.get('traffic') else None
-        
-        # Add security monitoring if enabled
-        self.security_monitor = SecurityMonitor(
-            self.config.get('security_config'),
-            quiet=self.config.get('quiet', False)  # Pass quiet mode to security monitor
-        ) if self.config.get('security') else None
-        
-        # Connection history tracking
-        self.connection_history = {}  # key -> list of (timestamp, connection)
-        
-    def _process_connections(self):
-        """Process connections with enhanced features"""
-        # First use parent class to process connections
-        super()._process_connections()
-        
-        import time
-        now = time.time()
+        # Update security information (always enabled now)
+        alerts = self.security_monitor.check_connections(self.active_connections)
+        if alerts:
+            self.security_monitor.log_alerts(alerts)
+            
+            # Show a notification for severe alerts only in non-quiet mode
+            if not self.config.get('quiet', False):
+                for alert in alerts:
+                    if alert['level'] == 'critical':
+                        Console().print(f"[bold red]SECURITY ALERT: {alert['message']}[/bold red]")
         
         # Update traffic information if enabled
         if self.traffic_monitor:
             self.traffic_monitor.update(self.active_connections)
             self.traffic_monitor.update_history(self.active_connections)
             
-        # Update security information if enabled
-        if self.security_monitor:
-            alerts = self.security_monitor.check_connections(self.active_connections)
-            if alerts:
-                self.security_monitor.log_alerts(alerts)
-                
-                # Show a notification for severe alerts only in non-quiet mode
-                if not self.config.get('quiet', False):
-                    for alert in alerts:
-                        if alert['level'] == 'critical':
-                            Console().print(f"[bold red]SECURITY ALERT: {alert['message']}[/bold red]")
-        
         # Update connection history
         for key, conn in self.active_connections.items():
             if key not in self.connection_history:
@@ -174,55 +200,147 @@ class EnhancedConnectionMonitor(ConnectionMonitor):
             if len(self.connection_history[key]) > 100:
                 self.connection_history[key].pop(0)
                 
+        # Update DNS resolutions
+        self.dns_resolver.update_cache()
+    
+    def _get_filter_info_panel(self):
+        """Create a panel with active filter information"""
+        has_filters = (self.config.get('filter_process') or 
+                      self.config.get('filter_port') or 
+                      self.config.get('filter_ip') or
+                      self.config.get('filter_name') or
+                      self.config.get('filter_alert'))
+        
+        if not has_filters:
+            return None  # No panel if no filters
+        
+        filter_text = Text("Filters active:\n", style="bold yellow")
+        
+        if self.config.get('filter_process'):
+            # Format PID ranges nicely
+            pid_ranges = self._format_ranges(self.config['filter_process'])
+            filter_text.append(f"PID filter: {pid_ranges}\n")
+            
+        if self.config.get('filter_name'):
+            filter_text.append(f"Program name filter: {', '.join(self.config['filter_name'])}\n")
+            
+        if self.config.get('filter_port'):
+            # Format port ranges nicely
+            port_ranges = self._format_ranges(self.config['filter_port'])
+            filter_text.append(f"Port filter: {port_ranges}\n")
+            
+        if self.config.get('filter_ip'):
+            # Format IP ranges nicely
+            ip_ranges = self._format_ip_ranges(self.config['filter_ip'])
+            filter_text.append(f"IP filter: {ip_ranges}\n")
+            
+        if self.config.get('filter_alert'):
+            filter_text.append(f"Alert filter: {', '.join(self.config['filter_alert'])}\n")
+        
+        return Panel(filter_text, border_style="yellow", title="Filter Information", expand=False)
+        
     def monitor(self):
         """Main monitoring loop with filtering support"""
         import time
         console = Console()
         poll_interval = self.config.get('poll_interval', 1.0)
         
-        # Get initial connections
-        self.active_connections = self.collector.get_connections()
+        # Hide cursor for cleaner display
+        os.system('tput civis')
         
-        # Apply filters if specified
-        if self.config.get('filter_process') or self.config.get('filter_port') or self.config.get('filter_ip'):
-            console.print("[bold yellow]Filters active:[/bold yellow]")
-            if self.config.get('filter_process'):
-                console.print(f"Process filter: {self.config['filter_process']}")
-            if self.config.get('filter_port'):
-                console.print(f"Port filter: {self.config['filter_port']}")
-            if self.config.get('filter_ip'):
-                console.print(f"IP filter: {self.config['filter_ip']}")
-                
-        with Live(console=console, refresh_per_second=4) as live:
-            while True:
-                try:
-                    # Update connection data
-                    self._process_connections()
+        try:
+            # Get initial connections
+            self.active_connections = self.collector.get_connections()
+            
+            # Use a single, persistent Live context
+            with console.screen() as screen:
+                while True:
+                    try:
+                        # Update connection data
+                        self._process_connections()
+                        
+                        # Apply filters if specified
+                        filtered_active = self._apply_filters(self.active_connections)
+                        filtered_new = {k: v for k, v in self.new_connections.items() if k in filtered_active}
+                        filtered_closed = {k: v for k, v in self.closed_connections.items() 
+                                         if self._connection_matches_filters(v[0])}
+                        
+                        # Build and update table
+                        table = self.table_builder.build_table(
+                            filtered_active,
+                            filtered_new,
+                            filtered_closed
+                        )
+                        
+                        # Clear screen and render content
+                        console.clear()
+                        
+                        # Display filter information above the table if filters are active
+                        filter_panel = self._get_filter_info_panel()
+                        if filter_panel:
+                            console.print(filter_panel)
+                            
+                        # Now display the table
+                        console.print(table)
+                            
+                    except Exception as e:
+                        console.print(f"[bold red]Error during monitoring: {str(e)}[/bold red]")
                     
-                    # Apply filters if specified
-                    filtered_active = self._apply_filters(self.active_connections)
-                    filtered_new = {k: v for k, v in self.new_connections.items() if k in filtered_active}
-                    filtered_closed = {k: v for k, v in self.closed_connections.items() 
-                                     if self._connection_matches_filters(v[0])}
-                    
-                    # Build and update table
-                    table = self.table_builder.build_table(
-                        filtered_active,
-                        filtered_new,
-                        filtered_closed
-                    )
-                    live.update(table)
-                except Exception as e:
-                    console.print(f"[bold red]Error during monitoring: {str(e)}[/bold red]")
-                
-                # Sleep until next poll
-                time.sleep(poll_interval)
+                    # Sleep until next poll
+                    time.sleep(poll_interval)
+        finally:
+            # Show cursor again when exiting
+            os.system('tput cnorm')
+    
+    def _format_ranges(self, num_list):
+        """Format a list of numbers as ranges for display"""
+        if not num_list:
+            return ""
+            
+        # Sort the numbers
+        num_list = sorted(num_list)
+        
+        # Group consecutive numbers into ranges
+        ranges = []
+        range_start = num_list[0]
+        prev_num = num_list[0]
+        
+        for num in num_list[1:]:
+            if num > prev_num + 1:
+                # End of a range
+                if prev_num > range_start:
+                    ranges.append(f"{range_start}-{prev_num}")
+                else:
+                    ranges.append(str(range_start))
+                range_start = num
+            prev_num = num
+            
+        # Add the last range
+        if prev_num > range_start:
+            ranges.append(f"{range_start}-{prev_num}")
+        else:
+            ranges.append(str(range_start))
+            
+        return ", ".join(ranges)
+    
+    def _format_ip_ranges(self, ip_list):
+        """Format IP list as ranges for display"""
+        if not ip_list:
+            return ""
+            
+        # Format each IP or network
+        formatted = []
+        for ip in ip_list:
+            formatted.append(str(ip))
+            
+        return ", ".join(formatted)
                 
     def _apply_filters(self, connections: dict) -> dict:
         """Apply filters to connections"""
         if not (self.config.get('filter_process') or 
                 self.config.get('filter_port') or 
-                self.config.get('filter_ip')):
+                self.config.get('filter_ip') or
+                self.config.get('filter_name')):
             return connections
             
         filtered = {}
@@ -234,22 +352,49 @@ class EnhancedConnectionMonitor(ConnectionMonitor):
         
     def _connection_matches_filters(self, conn: EnhancedConnection) -> bool:
         """Check if connection matches active filters"""
-        # Process filter
+        # Process (PID) filter
         if self.config.get('filter_process'):
-            filter_text = self.config['filter_process'].lower()
-            if filter_text not in conn.process_name.lower():
+            if conn.pid not in self.config['filter_process']:
+                return False
+                
+        # Program name filter
+        if self.config.get('filter_name'):
+            name_match = False
+            for name_filter in self.config['filter_name']:
+                if name_filter.lower() in conn.process_name.lower():
+                    name_match = True
+                    break
+            if not name_match:
                 return False
                 
         # Port filter
         if self.config.get('filter_port'):
-            filter_port = int(self.config['filter_port'])
-            if conn.rp != filter_port:
+            if conn.rp not in self.config['filter_port']:
                 return False
                 
         # IP filter
         if self.config.get('filter_ip'):
-            filter_ip = self.config['filter_ip']
-            if filter_ip not in conn.rip:
+            ip_match = False
+            try:
+                conn_ip = ipaddress.ip_address(conn.rip)
+                for ip_filter in self.config['filter_ip']:
+                    # If it's a network
+                    if isinstance(ip_filter, ipaddress.IPv4Network) or isinstance(ip_filter, ipaddress.IPv6Network):
+                        if conn_ip in ip_filter:
+                            ip_match = True
+                            break
+                    # If it's a single IP
+                    elif ip_filter == conn_ip:
+                        ip_match = True
+                        break
+            except ValueError:
+                # If IP can't be parsed, try simple string matching
+                for ip_filter in self.config['filter_ip']:
+                    if str(ip_filter) in conn.rip:
+                        ip_match = True
+                        break
+                        
+            if not ip_match:
                 return False
                 
         return True
@@ -275,8 +420,6 @@ def parse_arguments():
                         help='Seconds to highlight new connections (default: 10)')
     parser.add_argument('--no-resolve', action='store_true', 
                         help='Disable DNS resolution (show raw IPs only)')
-    parser.add_argument('--split-port', action='store_true', 
-                        help='Split IP and port into separate columns')
     parser.add_argument('--poll-interval', type=float, default=1.0,
                         metavar='SEC',
                         help='Seconds between connection polls (default: 1.0)')
@@ -286,8 +429,6 @@ def parse_arguments():
     # Enhanced options
     parser.add_argument('--traffic', action='store_true',
                         help='Enable traffic monitoring')
-    parser.add_argument('--security', action='store_true',
-                        help='Enable security monitoring')
     parser.add_argument('--security-config', type=str,
                         help='Path to security configuration file (JSON or YAML)')
     parser.add_argument('--export-format', choices=['csv', 'json', 'yaml'], 
@@ -301,11 +442,15 @@ def parse_arguments():
     
     # Filter options
     parser.add_argument('--filter-process', type=str,
-                        help='Filter connections by process name (case-insensitive)')
-    parser.add_argument('--filter-port', type=int,
-                        help='Filter connections by remote port')
+                        help='Filter connections by process IDs (comma-separated, supports ranges, e.g. "1-500,3330")')
+    parser.add_argument('--filter-name', type=str,
+                        help='Filter connections by program names (comma-separated)')
+    parser.add_argument('--filter-port', type=str,
+                        help='Filter connections by remote ports (comma-separated, supports ranges, e.g. "80,443,8000-8999")')
     parser.add_argument('--filter-ip', type=str,
-                        help='Filter connections by remote IP address')
+                        help='Filter connections by remote IP addresses (comma-separated, supports CIDR notation, e.g. "192.168.1.0/24,10.0.0.1")')
+    parser.add_argument('--filter-alert', type=str, nargs='+',
+                        help='Filter connections by alert type (e.g., suspicious malicious trusted)')
     
     return parser.parse_args()
 
@@ -315,13 +460,8 @@ def main():
     args = parse_arguments()
     
     try:
-        # Use enhanced or basic monitor based on whether advanced features are requested
-        if (args.traffic or args.security or args.filter_process or 
-            args.filter_port or args.filter_ip or 
-            args.export_format or args.export_alerts):
-            monitor = EnhancedConnectionMonitor(args)
-        else:
-            monitor = ConnectionMonitor(args)
+        # Create monitor instance
+        monitor = ConnectionMonitor(args)
         
         # Check if export was requested
         if args.export_format and args.export_file:
@@ -332,10 +472,10 @@ def main():
             return
             
         # Check if security alert export was requested
-        if args.security and args.export_alerts:
+        if args.export_alerts:
             # Run in single-shot mode to export alerts
             monitor._process_connections()  # Update connections
-            if hasattr(monitor, 'security_monitor') and monitor.security_monitor:
+            if monitor.security_monitor:
                 export_alerts(monitor.security_monitor.alert_history, args.export_alerts)
                 print(f"Exported security alerts to {args.export_alerts}")
             return

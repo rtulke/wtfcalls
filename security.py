@@ -218,9 +218,9 @@ class ThreatIntelligence:
     def _is_unusual_subprocess_connection(self, conn) -> bool:
         """Check if this is an unusual subprocess connection"""
         unusual_subprocess_patterns = [
-            r'sh, r'bash, r'dash, r'zsh,
-            r'python[0-9.]*, r'perl, r'ruby, r'node,
-            r'cmd.exe, r'powershell.exe, r'wscript.exe, r'cscript.exe
+            r'sh$', r'bash$', r'dash$', r'zsh$',
+            r'python[0-9.]*$', r'perl$', r'ruby$', r'node$',
+            r'cmd.exe$', r'powershell.exe$', r'wscript.exe$', r'cscript.exe$'
         ]
         
         # Check if process matches any unusual subprocess pattern
@@ -306,3 +306,118 @@ class ThreatIntelligence:
                 results['malicious'].append(conn)
         
         return results
+
+
+class SecurityMonitor:
+    """
+    Monitors connections for security issues and provides alerting
+    """
+    def __init__(self, config_path: str = None):
+        self.threat_intel = ThreatIntelligence(config_path)
+        self.alert_history = []
+        self.last_check = time.time()
+        self.check_interval = 10  # seconds
+        
+    def check_connections(self, connections: Dict) -> List[dict]:
+        """
+        Check connections for security issues
+        Returns a list of alerts
+        """
+        now = time.time()
+        
+        # Only check periodically to avoid performance impact
+        if now - self.last_check < self.check_interval:
+            return []
+            
+        self.last_check = now
+        
+        # Analyze all connections
+        results = self.threat_intel.batch_analyze(connections)
+        
+        # Generate alerts for suspicious and malicious connections
+        alerts = []
+        
+        for conn in results.get('suspicious', []) + results.get('malicious', []):
+            alert = {
+                'timestamp': now,
+                'level': 'warning' if conn.threat_level == 1 else 'critical',
+                'message': f"Suspicious connection: {conn.process_name}[{conn.pid}] -> {conn.rip}:{conn.rp}",
+                'details': {
+                    'process': conn.process_name,
+                    'pid': conn.pid,
+                    'remote_ip': conn.rip,
+                    'remote_port': conn.rp,
+                    'local_ip': conn.lip,
+                    'local_port': conn.lp,
+                    'threat_level': conn.threat_level,
+                    'notes': conn.notes
+                }
+            }
+            
+            # Add to history and return
+            self.alert_history.append(alert)
+            alerts.append(alert)
+            
+        return alerts
+        
+    def log_alerts(self, alerts: List[dict]) -> None:
+        """Log security alerts"""
+        for alert in alerts:
+            level = alert['level']
+            
+            if level == 'critical':
+                logging.critical(alert['message'])
+            elif level == 'warning':
+                logging.warning(alert['message'])
+            else:
+                logging.info(alert['message'])
+                
+    def get_recent_alerts(self, seconds: int = 300) -> List[dict]:
+        """Get alerts from the last X seconds"""
+        now = time.time()
+        return [a for a in self.alert_history if now - a['timestamp'] <= seconds]
+        
+    def get_alerts_by_process(self, process_name: str) -> List[dict]:
+        """Get alerts for a specific process"""
+        return [a for a in self.alert_history 
+                if a['details']['process'].lower() == process_name.lower()]
+                
+    def export_alerts(self, filename: str, format: str = 'json') -> None:
+        """Export alerts to file"""
+        if not self.alert_history:
+            return
+            
+        try:
+            with open(filename, 'w') as f:
+                if format.lower() == 'json':
+                    # Convert timestamp to ISO format for better readability
+                    formatted_alerts = []
+                    for alert in self.alert_history:
+                        alert_copy = alert.copy()
+                        alert_copy['timestamp'] = time.strftime(
+                            '%Y-%m-%d %H:%M:%S', 
+                            time.localtime(alert['timestamp'])
+                        )
+                        formatted_alerts.append(alert_copy)
+                        
+                    json.dump(formatted_alerts, f, indent=2)
+                elif format.lower() == 'yaml':
+                    if yaml_available:
+                        import yaml
+                        # Convert timestamp to ISO format for better readability
+                        formatted_alerts = []
+                        for alert in self.alert_history:
+                            alert_copy = alert.copy()
+                            alert_copy['timestamp'] = time.strftime(
+                                '%Y-%m-%d %H:%M:%S', 
+                                time.localtime(alert['timestamp'])
+                            )
+                            formatted_alerts.append(alert_copy)
+                            
+                        yaml.dump(formatted_alerts, f)
+                    else:
+                        logging.error("PyYAML ist erforderlich für YAML-Export")
+                else:
+                    logging.error(f"Nicht unterstütztes Exportformat: {format}")
+        except Exception as e:
+            logging.error(f"Fehler beim Exportieren der Alarme: {str(e)}")

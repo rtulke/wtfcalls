@@ -26,6 +26,10 @@ pip install psutil rich textual pyyaml ipaddress
 git clone https://github.com/rtulke/wtfcalls.git
 cd wtfcalls
 chmod +x wtfcalls.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install .
 ```
 
 ## Usage

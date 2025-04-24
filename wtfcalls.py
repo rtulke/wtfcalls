@@ -19,6 +19,13 @@ from traffic import TrafficMonitor
 from security import SecurityMonitor, ThreatIntelligence
 from utils import export_connections, export_alerts
 
+# Setup root logger to avoid printing to console
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.FileHandler("wtfcalls.log")]
+)
+
 class ConnectionMonitor:
     """
     Main class for monitoring network connections.
@@ -123,7 +130,10 @@ class EnhancedConnectionMonitor(ConnectionMonitor):
         self.traffic_monitor = TrafficMonitor() if self.config.get('traffic') else None
         
         # Add security monitoring if enabled
-        self.security_monitor = SecurityMonitor(self.config.get('security_config')) if self.config.get('security') else None
+        self.security_monitor = SecurityMonitor(
+            self.config.get('security_config'),
+            quiet=self.config.get('quiet', False)  # Pass quiet mode to security monitor
+        ) if self.config.get('security') else None
         
         # Connection history tracking
         self.connection_history = {}  # key -> list of (timestamp, connection)
@@ -147,10 +157,11 @@ class EnhancedConnectionMonitor(ConnectionMonitor):
             if alerts:
                 self.security_monitor.log_alerts(alerts)
                 
-                # Show a notification for severe alerts
-                for alert in alerts:
-                    if alert['level'] == 'critical':
-                        Console().print(f"[bold red]SECURITY ALERT: {alert['message']}[/bold red]")
+                # Show a notification for severe alerts only in non-quiet mode
+                if not self.config.get('quiet', False):
+                    for alert in alerts:
+                        if alert['level'] == 'critical':
+                            Console().print(f"[bold red]SECURITY ALERT: {alert['message']}[/bold red]")
         
         # Update connection history
         for key, conn in self.active_connections.items():
@@ -285,6 +296,8 @@ def parse_arguments():
                         help='Filename for exported connection data')
     parser.add_argument('--export-alerts', type=str,
                         help='Filename for exported security alerts')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Suppress console warnings and only show the table')
     
     # Filter options
     parser.add_argument('--filter-process', type=str,

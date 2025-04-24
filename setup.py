@@ -9,9 +9,9 @@ setup(
     name="wtfcalls",
     version="0.2.0",
     description="Live detector for outgoing network calls on both macOS and Linux",
-    author="Your Name",
-    author_email="your.email@example.com",
-    url="https://github.com/yourusername/wtfcalls",
+    author="Robert Tulke",
+    author_email="rt@debian.sh",
+    url="https://github.com/rtulke/wtfcalls",
     packages=find_packages(),
     install_requires=[
         "psutil>=5.8.0",

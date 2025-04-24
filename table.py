@@ -48,6 +48,10 @@ class ConnectionTable:
         if self.config.get('traffic'):
             table.add_column("Traffic", style="yellow")
             
+        # Add status column if security enabled
+        if self.config.get('security'):
+            table.add_column("Status", style="bold")
+            
         now = time.time()
         
         # Section: New Connections
@@ -105,6 +109,11 @@ class ConnectionTable:
                     if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                         traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                         row.append(f"[bright_yellow]{traffic}[/bright_yellow]")
+                    
+                    # Add security status if enabled
+                    if self.config.get('security'):
+                        status = self._get_connection_status(conn)
+                        row.append(status)
                         
                     table.add_row(*row)
                 else:
@@ -119,6 +128,11 @@ class ConnectionTable:
                     if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                         traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                         row.append(f"[bright_yellow]{traffic}[/bright_yellow]")
+                    
+                    # Add security status if enabled
+                    if self.config.get('security'):
+                        status = self._get_connection_status(conn)
+                        row.append(status)
                         
                     table.add_row(*row)
             else:
@@ -152,6 +166,11 @@ class ConnectionTable:
                 if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                     traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                     row.append(f"[{style_prefix}yellow]{traffic}[/{style_prefix}yellow]")
+                
+                # Add security status if enabled
+                if self.config.get('security'):
+                    status = self._get_connection_status(conn)
+                    row.append(status)
                     
                 table.add_row(*row)
             else:
@@ -166,6 +185,11 @@ class ConnectionTable:
                 if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                     traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                     row.append(f"[{style_prefix}yellow]{traffic}[/{style_prefix}yellow]")
+                
+                # Add security status if enabled
+                if self.config.get('security'):
+                    status = self._get_connection_status(conn)
+                    row.append(status)
                     
                 table.add_row(*row)
                 
@@ -192,6 +216,11 @@ class ConnectionTable:
                     if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                         traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                         row.append(f"[grey37]{traffic}[/grey37]")
+                    
+                    # Add security status if enabled
+                    if self.config.get('security'):
+                        status = self._get_connection_status(conn, is_closed=True)
+                        row.append(status)
                         
                     table.add_row(*row)
                 else:
@@ -206,6 +235,11 @@ class ConnectionTable:
                     if self.config.get('traffic') and hasattr(conn, 'bytes_sent'):
                         traffic = f"{self._format_bytes(conn.bytes_sent)} ↑ / {self._format_bytes(conn.bytes_received)} ↓"
                         row.append(f"[grey37]{traffic}[/grey37]")
+                    
+                    # Add security status if enabled
+                    if self.config.get('security'):
+                        status = self._get_connection_status(conn, is_closed=True)
+                        row.append(status)
                         
                     table.add_row(*row)
             else:
@@ -221,3 +255,23 @@ class ConnectionTable:
             return f"{bytes_val/(1024*1024):.1f}MB"
         else:
             return f"{bytes_val/(1024*1024*1024):.1f}GB"
+            
+    def _get_connection_status(self, conn, is_closed=False) -> str:
+        """Get formatted status for a connection"""
+        if is_closed:
+            return f"[grey37]Closed[/grey37]"
+            
+        if not hasattr(conn, 'suspicious'):
+            return "[white]Normal[/white]"
+            
+        if conn.suspicious:
+            if conn.threat_level >= 2:
+                return f"[bright_red bold]Malicious[/bright_red bold]"
+            else:
+                return f"[bright_yellow]Suspicious[/bright_yellow]"
+                
+        # If it's a trusted connection
+        if hasattr(conn, 'notes') and "trusted" in conn.notes.lower():
+            return f"[green]Trusted[/green]"
+            
+        return "[white]Normal[/white]"

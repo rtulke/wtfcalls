@@ -3,7 +3,58 @@
 """
 setup.py – Installation script for WTFCalls
 """
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Command
+import os
+import stat
+import sys
+
+class MakeExecutableCommand(Command):
+    """Custom command to make wtfcalls.py executable."""
+    description = "Make wtfcalls.py executable"
+    user_options = []
+    
+    def initialize_options(self):
+        pass
+        
+    def finalize_options(self):
+        pass
+        
+    def run(self):
+        """Execute the command."""
+        try:
+            # Pfad zur wtfcalls.py bestimmen
+            package_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wtfcalls")
+            main_file = os.path.join(package_dir, "__init__.py")
+            
+            if os.path.exists(main_file):
+                # Aktuelle Berechtigungen holen
+                current_permissions = os.stat(main_file).st_mode
+                
+                # Ausführbare Rechte hinzufügen
+                os.chmod(main_file, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                print(f"Made {main_file} executable")
+            else:
+                print(f"Warning: File {main_file} not found")
+        except Exception as e:
+            print(f"Error making file executable: {e}")
+
+# Post-Installation Hook
+class InstallCommand(Command):
+    """Custom install command that makes the main file executable after installation."""
+    description = "Custom install command"
+    user_options = []
+    
+    def initialize_options(self):
+        pass
+        
+    def finalize_options(self):
+        pass
+        
+    def run(self):
+        # Führe Standard-Installation aus
+        self.run_command('install')
+        # Führe unser Custom-Command aus
+        self.run_command('make_executable')
 
 setup(
     name="wtfcalls",
@@ -47,4 +98,15 @@ setup(
         "Topic :: Security",
     ],
     python_requires=">=3.6",
+    cmdclass={
+        'make_executable': MakeExecutableCommand,
+        'custom_install': InstallCommand,
+    },
 )
+
+# Ausführen beim direkten Aufruf von setup.py
+if __name__ == "__main__":
+    # Führe das Command auch aus, wenn setup.py direkt aufgerufen wird
+    if len(sys.argv) <= 1 or sys.argv[1] not in ['make_executable', 'custom_install']:
+        cmd = MakeExecutableCommand(None)
+        cmd.run()

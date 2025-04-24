@@ -66,7 +66,9 @@ class TrafficMonitor:
                             # Update connection
                             conn.update_traffic(tx_bytes, rx_bytes)
                             break
-            
+                except Exception as e:
+                    logging.debug(f"Error parsing line in /proc/net/tcp: {str(e)}")
+                    continue
         except Exception as e:
             logging.debug(f"Error updating Linux traffic: {str(e)}")
                 
@@ -129,10 +131,9 @@ class TrafficMonitor:
                             # Update connection
                             conn.update_traffic(bytes_out, bytes_in)
                             break
-                            
-                except (ValueError, IndexError):
+                except (ValueError, IndexError) as e:
+                    logging.debug(f"Error parsing netstat line: {str(e)}")
                     continue
-                    
         except Exception as e:
             logging.debug(f"Error updating macOS traffic: {str(e)}")
             

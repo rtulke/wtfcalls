@@ -38,24 +38,6 @@ class MakeExecutableCommand(Command):
         except Exception as e:
             print(f"Error making file executable: {e}")
 
-# Post-Installation Hook
-class InstallCommand(Command):
-    """Custom install command that makes the main file executable after installation."""
-    description = "Custom install command"
-    user_options = []
-    
-    def initialize_options(self):
-        pass
-        
-    def finalize_options(self):
-        pass
-        
-    def run(self):
-        # Führe Standard-Installation aus
-        self.run_command('install')
-        # Führe unser Custom-Command aus
-        self.run_command('make_executable')
-
 setup(
     name="wtfcalls",
     version="0.2.0",
@@ -85,7 +67,6 @@ setup(
         "Environment :: Console",
         "Intended Audience :: Developers",
         "Intended Audience :: System Administrators",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
         "Programming Language :: Python :: 3",
@@ -100,13 +81,12 @@ setup(
     python_requires=">=3.6",
     cmdclass={
         'make_executable': MakeExecutableCommand,
-        'custom_install': InstallCommand,
     },
 )
 
 # Ausführen beim direkten Aufruf von setup.py
 if __name__ == "__main__":
     # Führe das Command auch aus, wenn setup.py direkt aufgerufen wird
-    if len(sys.argv) <= 1 or sys.argv[1] not in ['make_executable', 'custom_install']:
+    if len(sys.argv) <= 1 or sys.argv[1] not in ['make_executable']:
         cmd = MakeExecutableCommand(None)
         cmd.run()

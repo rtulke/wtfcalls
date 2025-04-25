@@ -13,14 +13,20 @@ What the Fuck Calls is a robust tool for live monitoring of outgoing network con
 
 ## Installation
 
-### Prerequisites
+
+### Basic Installation (OS wide, Not recommended)
 
 Required Python packages:
 ```bash
+pip install --upgrade pip
 pip install psutil rich textual pyyaml ipaddress
+git clone https://github.com/rtulke/wtfcalls.git
+cd wtfcalls
+chmod +x wtfcalls.py
 ```
 
-### Basic Installation
+
+### Basic Installation (virtuall environment)
 
 ```bash
 git clone https://github.com/rtulke/wtfcalls.git
@@ -29,8 +35,9 @@ chmod +x wtfcalls.py
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install .
+pip install -r requirements.txt
 ```
+
 
 ## Usage
 

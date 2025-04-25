@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wtfcalls"
+version = "0.2.0"
+authors = [
+    {name = "Robert Tulke", email = "rt@debian.sh"},
+]
+description = "Live detector for outgoing network calls on both macOS and Linux"
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Security",
+]
+dependencies = [
+    "psutil>=5.8.0",
+    "rich>=10.0.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "textual>=0.1.18",
+    "pyyaml>=5.1",
+    "ipaddress",
+]
+
+[project.scripts]
+wtfcalls = "wtfcalls:main"
+
+[tool.setuptools]
+# Direktes Importieren der Module aus dem Hauptverzeichnis
+py-modules = ["wtfcalls", "connection", "collector", "dns_resolver", "table", "logger", "traffic", "security", "utils"]
+# Statt packages = ["wtfcalls"]

@@ -40,7 +40,7 @@ class ConnectionMonitor:
     def __init__(self, args: argparse.Namespace):
         self.config = vars(args)
         self.dns_resolver = DNSResolver(
-            enable_resolution=not args.no_resolve,
+            enable_resolution=not args.show_ip,
             max_workers=10
         )
         self.logger = ConnectionLogger(enable=True)
@@ -48,9 +48,9 @@ class ConnectionMonitor:
         self.collector = EnhancedConnectionCollector(self.config)
         self.table_builder = ConnectionTable(self.config, self.dns_resolver)
         
-        # Security is always enabled now
+        # Security ist immer aktiviert
         self.security_monitor = SecurityMonitor(
-            self.config.get('security_config'),
+            self.config.get('config'),
             quiet=self.config.get('quiet', False)
         )
         
@@ -242,19 +242,43 @@ class ConnectionMonitor:
     def monitor(self):
         """Main monitoring loop with filtering support"""
         import time
+        import sys
+        import signal
+        
         console = Console()
         poll_interval = self.config.get('poll_interval', 1.0)
         
         # Hide cursor for cleaner display
         os.system('tput civis')
         
+        # Flag für das Programm, ob es weiterläuft
+        running = [True]
+        
+        # Signal-Handler zum Beenden des Programms
+        def handle_signal(sig, frame):
+            running[0] = False
+        
+        # SIGINT (Ctrl+C) und SIGTERM Handler registrieren
+        original_sigint = signal.getsignal(signal.SIGINT)
+        original_sigterm = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
+        
+        # Zusätzlicher Signal für SIGUSR1 (kann später mit kill -USR1 PID ausgelöst werden)
+        if hasattr(signal, 'SIGUSR1'):
+            original_sigusr1 = signal.getsignal(signal.SIGUSR1)
+            signal.signal(signal.SIGUSR1, handle_signal)
+        
         try:
             # Get initial connections
             self.active_connections = self.collector.get_connections()
             
+            # PID anzeigen für kill-Signal
+            my_pid = os.getpid()
+            
             # Use a single, persistent Live context
             with console.screen() as screen:
-                while True:
+                while running[0]:
                     try:
                         # Update connection data
                         self._process_connections()
@@ -282,13 +306,30 @@ class ConnectionMonitor:
                             
                         # Now display the table
                         console.print(table)
+                        
+                        # Add navigation hints at the bottom
+                        console.print(f"\n[dim]Press [bold]CTRL+C[/bold] to quit[/dim]")
+                        
+                        # PID anzeigen - hilfreich zum Beenden mit externem Signal
+                        console.print(f"[dim]wtfcalls PID: {my_pid}[/dim]")
                             
                     except Exception as e:
                         console.print(f"[bold red]Error during monitoring: {str(e)}[/bold red]")
                     
-                    # Sleep until next poll
-                    time.sleep(poll_interval)
+                    # Sleep until next poll - unterteilt in kleine Intervalle für bessere Reaktionsfähigkeit
+                    steps = 10
+                    step_time = poll_interval / steps
+                    for _ in range(steps):
+                        if not running[0]:
+                            break
+                        time.sleep(step_time)
         finally:
+            # Original-Signal-Handler wiederherstellen
+            signal.signal(signal.SIGINT, original_sigint)
+            signal.signal(signal.SIGTERM, original_sigterm)
+            if hasattr(signal, 'SIGUSR1'):
+                signal.signal(signal.SIGUSR1, original_sigusr1)
+            
             # Show cursor again when exiting
             os.system('tput cnorm')
     
@@ -404,53 +445,31 @@ def parse_arguments():
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
         description='wtfcalls: Monitor outgoing network connections',
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     
     # Basic options
-    parser.add_argument('--ipv4', action='store_true', 
-                        help='Show only IPv4 connections')
-    parser.add_argument('--ipv6', action='store_true', 
-                        help='Show only IPv6 connections')
-    parser.add_argument('--delay-closed', type=int, default=10,
-                        metavar='SEC',
-                        help='Seconds to keep closed connections displayed (default: 10)')
-    parser.add_argument('--delay-new', type=int, default=10,
-                        metavar='SEC',
-                        help='Seconds to highlight new connections (default: 10)')
-    parser.add_argument('--no-resolve', action='store_true', 
-                        help='Disable DNS resolution (show raw IPs only)')
-    parser.add_argument('--poll-interval', type=float, default=1.0,
-                        metavar='SEC',
-                        help='Seconds between connection polls (default: 1.0)')
-    parser.add_argument('--full-path', action='store_true', 
-                        help='Show full executable path for processes')
+    parser.add_argument('-4', '--ipv4', action='store_true', help='Show only IPv4 connections')
+    parser.add_argument('-6', '--ipv6', action='store_true', help='Show only IPv6 connections')
+    parser.add_argument('-d', '--delay-closed', type=int, default=10, metavar='SEC', help='Seconds to keep closed connections displayed')
+    parser.add_argument('-n', '--delay-new', type=int, default=10, metavar='SEC', help='Seconds to highlight new connections')
+    parser.add_argument('-i', '--show-ip', action='store_true', help='Disable DNS resolution (show raw IPs only)')
+    parser.add_argument('-p', '--poll-interval', type=float, default=1.0, metavar='SEC', help='Seconds between connection polls')
                         
     # Enhanced options
-    parser.add_argument('--traffic', action='store_true',
-                        help='Enable traffic monitoring')
-    parser.add_argument('--security-config', type=str,
-                        help='Path to security configuration file (JSON or YAML)')
-    parser.add_argument('--export-format', choices=['csv', 'json', 'yaml'], 
-                        help='Export format for connection data')
-    parser.add_argument('--export-file', type=str,
-                        help='Filename for exported connection data')
-    parser.add_argument('--export-alerts', type=str,
-                        help='Filename for exported security alerts')
-    parser.add_argument('--quiet', action='store_true',
-                        help='Suppress console warnings and only show the table')
+    parser.add_argument('-t', '--traffic', action='store_true', help='Enable traffic monitoring')
+    parser.add_argument('-c', '--config', type=str, help='Path to configuration file (JSON or YAML)')
+    parser.add_argument('-e', '--export-format', choices=['csv', 'json', 'yaml'], help='Export format for connection data')
+    parser.add_argument('-o', '--export-file', type=str, help='Filename for exported connection data')
+    parser.add_argument('-a', '--export-alerts', type=str, help='Filename for exported security alerts')
+    parser.add_argument('-q', '--quiet', action='store_true', help='Suppress console warnings and only show the table')
     
     # Filter options
-    parser.add_argument('--filter-process', type=str,
-                        help='Filter connections by process IDs (comma-separated, supports ranges, e.g. "1-500,3330")')
-    parser.add_argument('--filter-name', type=str,
-                        help='Filter connections by program names (comma-separated)')
-    parser.add_argument('--filter-port', type=str,
-                        help='Filter connections by remote ports (comma-separated, supports ranges, e.g. "80,443,8000-8999")')
-    parser.add_argument('--filter-ip', type=str,
-                        help='Filter connections by remote IP addresses (comma-separated, supports CIDR notation, e.g. "192.168.1.0/24,10.0.0.1")')
-    parser.add_argument('--filter-alert', type=str, nargs='+',
-                        help='Filter connections by alert type (e.g., suspicious malicious trusted)')
+    parser.add_argument('-fp', '--filter-process', type=str, help='Filter connections by process IDs (comma-separated, supports ranges, e.g. "1-500,3330")')
+    parser.add_argument('-fn', '--filter-name', type=str, help='Filter connections by program names (comma-separated)')
+    parser.add_argument('-ft', '--filter-port', type=str, help='Filter connections by remote ports (comma-separated, supports ranges, e.g. "80,443,8000-8999")')
+    parser.add_argument('-fi', '--filter-ip', type=str, help='Filter connections by remote IP addresses (comma-separated, supports CIDR notation, e.g. "192.168.1.0/24,10.0.0.1")')
+    parser.add_argument('-fa', '--filter-alert', type=str, nargs='+', help='Filter connections by alert type (e.g., suspicious malicious trusted)')
     
     return parser.parse_args()
 

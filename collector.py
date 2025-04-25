@@ -111,20 +111,7 @@ class ConnectionCollector:
         try:
             proc = psutil.Process(pid)
             
-            # Option 1: Full executable path
-            if self.config.get('full_path'):
-                try:
-                    return proc.exe()
-                except (psutil.AccessDenied, psutil.ZombieProcess):
-                    # Fall back to cmdline if exe() fails
-                    try:
-                        cmdline = proc.cmdline()
-                        if cmdline:
-                            return ' '.join(cmdline)
-                    except (psutil.AccessDenied, psutil.ZombieProcess):
-                        pass
-            
-            # Option 2: Improved process name (default)
+            # Option: Improved process name (default)
             # For macOS, try to extract a meaningful application name
             if platform.system() == 'Darwin':
                 try:

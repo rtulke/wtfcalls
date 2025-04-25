@@ -15,6 +15,7 @@ from rich.live import Live
 from rich import box
 from rich.panel import Panel
 from rich.text import Text
+from rich.console import Group
 
 # Import internal modules
 from connection import Connection, EnhancedConnection
@@ -65,9 +66,6 @@ class ConnectionMonitor:
         
         # Process filter arguments
         self._process_filter_args()
-        
-        # Set up signal handler for graceful exit
-        signal.signal(signal.SIGINT, self._handle_exit)
         
     def _process_filter_args(self):
         """Process and convert filter arguments to the correct format"""
@@ -209,7 +207,8 @@ class ConnectionMonitor:
                       self.config.get('filter_port') or 
                       self.config.get('filter_ip') or
                       self.config.get('filter_name') or
-                      self.config.get('filter_alert'))
+                      self.config.get('filter_alert') or
+                      self.config.get('filter_connection'))
         
         if not has_filters:
             return None  # No panel if no filters
@@ -236,20 +235,21 @@ class ConnectionMonitor:
             
         if self.config.get('filter_alert'):
             filter_text.append(f"Alert filter: {', '.join(self.config['filter_alert'])}\n")
+            
+        if self.config.get('filter_connection'):
+            direction = "inbound" if self.config['filter_connection'] == "in" else "outbound"
+            filter_text.append(f"Direction filter: {direction}\n")
         
-        return Panel(filter_text, border_style="yellow", title="Filter Information", expand=False)
+        return Panel(filter_text, border_style="yellow", title="Filter Information", expand=True)
         
     def monitor(self):
-        """Main monitoring loop with filtering support"""
+        """Main monitoring loop with filtering support - Flimmerfreie Version"""
         import time
         import sys
         import signal
         
         console = Console()
         poll_interval = self.config.get('poll_interval', 1.0)
-        
-        # Hide cursor for cleaner display
-        os.system('tput civis')
         
         # Flag für das Programm, ob es weiterläuft
         running = [True]
@@ -276,8 +276,36 @@ class ConnectionMonitor:
             # PID anzeigen für kill-Signal
             my_pid = os.getpid()
             
-            # Use a single, persistent Live context
-            with console.screen() as screen:
+            # Hide cursor for cleaner display
+            os.system('tput civis')
+            
+            # Erste Tabelle erstellen
+            filtered_active = self._apply_filters(self.active_connections)
+            filtered_new = {k: v for k, v in self.new_connections.items() if k in filtered_active}
+            filtered_closed = {k: v for k, v in self.closed_connections.items() 
+                             if self._connection_matches_filters(v[0])}
+            
+            table = self.table_builder.build_table(
+                filtered_active,
+                filtered_new,
+                filtered_closed
+            )
+            
+            # Filter panel
+            filter_panel = self._get_filter_info_panel()
+            
+            # Group content for initial display
+            content = []
+            if filter_panel:
+                content.append(filter_panel)
+            content.append(table)
+            content.append(Text(f"\nPress [bold]CTRL+C[/bold] to quit", style="dim"))
+            content.append(Text(f"wtfcalls PID: {my_pid}", style="dim"))
+            
+            initial_group = Group(*content)
+                
+            # Live-Anzeige mit dem Inhalt starten und niedrigere Aktualisierungsrate festlegen
+            with Live(initial_group, console=console, screen=True, refresh_per_second=4, auto_refresh=False) as live:
                 while running[0]:
                     try:
                         # Update connection data
@@ -289,32 +317,36 @@ class ConnectionMonitor:
                         filtered_closed = {k: v for k, v in self.closed_connections.items() 
                                          if self._connection_matches_filters(v[0])}
                         
-                        # Build and update table
+                        # Build table without clearing the screen
                         table = self.table_builder.build_table(
                             filtered_active,
                             filtered_new,
                             filtered_closed
                         )
                         
-                        # Clear screen and render content
-                        console.clear()
-                        
-                        # Display filter information above the table if filters are active
+                        # Filter panel
                         filter_panel = self._get_filter_info_panel()
+                        
+                        # Combine filter panel and table
+                        content = []
                         if filter_panel:
-                            console.print(filter_panel)
-                            
-                        # Now display the table
-                        console.print(table)
+                            content.append(filter_panel)
+                        content.append(table)
                         
-                        # Add navigation hints at the bottom
-                        console.print(f"\n[dim]Press [bold]CTRL+C[/bold] to quit[/dim]")
+                        # Navigation hints
+                        content.append(Text(f"\nPress [bold]CTRL+C[/bold] to quit", style="dim"))
+                        content.append(Text(f"wtfcalls PID: {my_pid}", style="dim"))
                         
-                        # PID anzeigen - hilfreich zum Beenden mit externem Signal
-                        console.print(f"[dim]wtfcalls PID: {my_pid}[/dim]")
+                        # Update the live display with all content
+                        live.update(Group(*content))
+                        
+                        # Manually refresh the display
+                        live.refresh()
                             
                     except Exception as e:
-                        console.print(f"[bold red]Error during monitoring: {str(e)}[/bold red]")
+                        error_msg = Text(f"Error during monitoring: {str(e)}", style="bold red")
+                        live.update(Group(error_msg))
+                        live.refresh()
                     
                     # Sleep until next poll - unterteilt in kleine Intervalle für bessere Reaktionsfähigkeit
                     steps = 10
@@ -381,7 +413,8 @@ class ConnectionMonitor:
         if not (self.config.get('filter_process') or 
                 self.config.get('filter_port') or 
                 self.config.get('filter_ip') or
-                self.config.get('filter_name')):
+                self.config.get('filter_name') or
+                self.config.get('filter_connection')):
             return connections
             
         filtered = {}
@@ -438,6 +471,11 @@ class ConnectionMonitor:
             if not ip_match:
                 return False
                 
+        # Connection direction filter
+        if self.config.get('filter_connection'):
+            if conn.direction != self.config.get('filter_connection'):
+                return False
+                
         return True
 
 
@@ -470,6 +508,7 @@ def parse_arguments():
     parser.add_argument('-ft', '--filter-port', type=str, help='Filter connections by remote ports (comma-separated, supports ranges, e.g. "80,443,8000-8999")')
     parser.add_argument('-fi', '--filter-ip', type=str, help='Filter connections by remote IP addresses (comma-separated, supports CIDR notation, e.g. "192.168.1.0/24,10.0.0.1")')
     parser.add_argument('-fa', '--filter-alert', type=str, nargs='+', help='Filter connections by alert type (e.g., suspicious malicious trusted)')
+    parser.add_argument('-fc', '--filter-connection', type=str, choices=['in', 'out'], help='Filter connections by direction (in=inbound, out=outbound)')
     
     return parser.parse_args()
 

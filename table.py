@@ -4,6 +4,7 @@
 table.py – Table display handling with flat list structure
 """
 import time
+import shutil  # Für Terminal-Größenerkennung
 from typing import Dict, List, Tuple, Any, Optional
 from rich.table import Table
 from rich.console import Console
@@ -22,7 +23,11 @@ class ConnectionTable:
         
     def build_table(self, active: Dict, new_conns: Dict, closed_conns: Dict) -> Table:
         """Build a rich table with all connections in a flat list"""
-        table = Table(title="wtfcalls – Connections")
+        # Terminal-Breite ermitteln
+        terminal_width, _ = shutil.get_terminal_size((80, 20))  # Fallback 80x20
+        
+        # Tabelle mit voller Breite und Expansion erstellen
+        table = Table(title="wtfcalls – Connections", width=terminal_width, expand=True)
         
         # Calculate optimal width for program column based on current data
         max_program_length = 15  # Default minimum width
@@ -30,24 +35,26 @@ class ConnectionTable:
             program_length = len(conn.process_name)
             max_program_length = max(max_program_length, program_length)
         
-        # Add columns - Split port is now the default
-        table.add_column("PID", style="cyan", no_wrap=True, width=8)
-        table.add_column("Program", style="magenta", ratio=4, min_width=max_program_length, 
-                         no_wrap=True, overflow="ellipsis")
-        table.add_column("Local IP", style="green")
-        table.add_column("Local Port", style="green")
-        table.add_column("Remote IP", style="red")
-        table.add_column("Remote Port", style="red")
+        # Kolumnen mit relativen Breiten definieren
+        table.add_column("PID", style="cyan", no_wrap=True, width=8, ratio=1)
+        table.add_column("Program", style="magenta", no_wrap=True, overflow="ellipsis", ratio=7)
+        table.add_column("Local IP", style="green", ratio=5)
+        table.add_column("Local Port", style="green", ratio=2)
+        table.add_column("Remote IP", style="red", ratio=5)
+        table.add_column("Remote Port", style="red", ratio=2)
+        
+        # Add Connection Direction column - increased width for better visibility
+        table.add_column("Connection", style="bright_white", width=6, justify="center", ratio=1)
             
         # Add traffic column if enabled
         if self.config.get('traffic'):
-            table.add_column("Traffic", style="yellow")
+            table.add_column("Traffic", style="yellow", ratio=4)
             
         # Add security status column - now always enabled
-        table.add_column("Security", style="bold")
+        table.add_column("Security", style="bold", ratio=3)
             
         # Add connection status column - renamed to Alert
-        table.add_column("Alert", style="cyan")
+        table.add_column("Alert", style="cyan", ratio=2)
         
         now = time.time()
         
@@ -103,6 +110,17 @@ class ConnectionTable:
                     filtered_connections.append(conn_info)
             all_connections = filtered_connections
         
+        # Apply connection direction filter if specified
+        conn_direction_filter = self.config.get('filter_connection')
+        if conn_direction_filter:
+            filtered_connections = []
+            for conn_info in all_connections:
+                conn = conn_info['conn']
+                # Filter by connection direction
+                if conn.direction == conn_direction_filter:
+                    filtered_connections.append(conn_info)
+            all_connections = filtered_connections
+        
         # Add all connections to the table
         for conn_info in all_connections:
             conn = conn_info['conn']
@@ -151,6 +169,9 @@ class ConnectionTable:
         if hasattr(conn, 'suspicious') and conn.suspicious and status != 'closed':
             style_prefix = "bold "
             
+        # Direction color based on direction (red for incoming, green for outgoing)
+        direction_color = "bright_red" if conn.direction == "in" else "bright_green"
+        
         # Always using split port format now
         row = [
             f"[{style_prefix}cyan]{pid}[/{style_prefix}cyan]", 
@@ -158,7 +179,8 @@ class ConnectionTable:
             f"[{style_prefix}green]{self.dns_resolver.resolve(lip)}[/{style_prefix}green]", 
             f"[{style_prefix}green]{lp}[/{style_prefix}green]", 
             f"[{style_prefix}red]{self.dns_resolver.resolve(rip)}[/{style_prefix}red]", 
-            f"[{style_prefix}red]{rp}[/{style_prefix}red]"
+            f"[{style_prefix}red]{rp}[/{style_prefix}red]",
+            f"[{style_prefix}{direction_color} bold]{conn.direction_symbol}[/{style_prefix}{direction_color} bold]"
         ]
         
         # Add traffic info if available and enabled

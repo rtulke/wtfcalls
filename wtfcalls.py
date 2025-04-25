@@ -242,6 +242,23 @@ class ConnectionMonitor:
         
         return Panel(filter_text, border_style="yellow", title="Filter Information", expand=True)
         
+    def _get_connection_summary(self, active, new, closed):
+        """Erstellt eine Zusammenfassung der aktuellen Verbindungsdaten"""
+        # Gesamtzahlen
+        active_count = len(active)
+        new_count = len(new)
+        closed_count = len(closed)
+        
+        # Eingehende und ausgehende Verbindungen zählen
+        incoming = sum(1 for conn in active.values() if conn.direction == "in")
+        outgoing = sum(1 for conn in active.values() if conn.direction == "out")
+        
+        summary_text = Text("\nVerbindungszusammenfassung:", style="bold")
+        summary_text.append(f"\nGesamt: {active_count} aktiv, {new_count} neu, {closed_count} geschlossen")
+        summary_text.append(f"\nRichtung: {incoming} eingehend, {outgoing} ausgehend")
+        
+        return summary_text
+        
     def monitor(self):
         """Main monitoring loop with filtering support - Flimmerfreie Version"""
         import time
@@ -294,13 +311,17 @@ class ConnectionMonitor:
             # Filter panel
             filter_panel = self._get_filter_info_panel()
             
+            # Verbindungszusammenfassung erstellen
+            summary = self._get_connection_summary(filtered_active, filtered_new, filtered_closed)
+            
             # Group content for initial display
             content = []
             if filter_panel:
                 content.append(filter_panel)
             content.append(table)
-            content.append(Text(f"\nPress [bold]CTRL+C[/bold] to quit", style="dim"))
-            content.append(Text(f"wtfcalls PID: {my_pid}", style="dim"))
+            content.append(summary)
+            content.append(Text("Press CTRL+C to quit", style=None))
+            content.append(Text(f"wtfcalls PID: {my_pid}", style=None))
             
             initial_group = Group(*content)
                 
@@ -327,15 +348,19 @@ class ConnectionMonitor:
                         # Filter panel
                         filter_panel = self._get_filter_info_panel()
                         
+                        # Verbindungszusammenfassung aktualisieren
+                        summary = self._get_connection_summary(filtered_active, filtered_new, filtered_closed)
+                        
                         # Combine filter panel and table
                         content = []
                         if filter_panel:
                             content.append(filter_panel)
                         content.append(table)
                         
-                        # Navigation hints
-                        content.append(Text(f"\nPress [bold]CTRL+C[/bold] to quit", style="dim"))
-                        content.append(Text(f"wtfcalls PID: {my_pid}", style="dim"))
+                        # Navigation hints und Zusammenfassung
+                        content.append(summary)
+                        content.append(Text("Press CTRL+C to quit", style=None))
+                        content.append(Text(f"wtfcalls PID: {my_pid}", style=None))
                         
                         # Update the live display with all content
                         live.update(Group(*content))

@@ -1,6 +1,6 @@
 # WTFCalls
 
-What the Fuck Calls is a robust tool for live monitoring of outgoing network connections.
+<b>W</b>hat <b>T</b>he <b>F</b>uck Calls is a robust tool for live monitoring of outgoing network connections.
 
 ## Features
 

@@ -4,12 +4,12 @@
 
 ## Features
 
-- **Live Connection Monitoring**: Detect and display all outgoing network connections in real-time
-- **Enhanced TUI Interface**: Advanced textual user interface with filtering and multiple views
+- **Live Connection Monitoring**: Detect, filter and display all network connections in real-time
+- **TUI Interface**: Advanced textual user interface with filtering and multiple views
 - **Security Analysis**: Detect potentially suspicious connections based on configurable rules
 - **Traffic Monitoring**: Track data transferred for each connection
 - **Export Capabilities**: Export connection data and security alerts in CSV, JSON, or YAML format
-- **Compatibility**: Works on both Linux and macOS systems
+- **Compatibility**: Works on Linux and macOS systems
 
 ## Installation
 

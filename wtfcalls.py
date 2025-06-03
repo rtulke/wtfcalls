@@ -58,10 +58,7 @@ try:
             if self.setup_done:
                 return
             
-            # ====== SPALTENBREITEN KONFIGURATION ======
-            # Hier kannst du die Breite jeder Spalte anpassen:
-                
-            self.add_column("PID", width=8)              # Prozess-ID
+            self.add_column("PID", width=8)              # Process-ID
             self.add_column("Program", width=18)         # Programmname  
             self.add_column("Local IP", width=39)        # Lokale IP (IPv6-kompatibel)
             self.add_column("Local Port", width=6)       # Lokaler Port
@@ -72,8 +69,6 @@ try:
             self.add_column("Traffic (in)", width=9)     # Eingehender Traffic
             self.add_column("Traffic (out)", width=9)    # Ausgehender Traffic
             self.add_column("Status", width=8)           # Verbindungsstatus
-            
-            # ==========================================
             
             self.setup_done = True
             
@@ -120,7 +115,7 @@ try:
             freeze_controls = " | SPACE=freeze/unfreeze" if not frozen else " | SPACE=unfreeze"
             
             text = (f"Active: {active} | New: {new} | Closed: {closed}{security_info}{traffic_info}{freeze_info} | "
-                   f"Navigation: ↑/↓ rows, PgUp/PgDn pages{freeze_controls} | q=quit, r=refresh")
+                   f"Navigation: ↑/↓ rows, PgUp/PgDn pages{freeze_controls} | q=quit, r=refresh, R=reset")
             
             # Change CSS class based on frozen state
             if frozen:
@@ -162,6 +157,7 @@ try:
             Binding("q", "quit", "Quit"),
             Binding("escape", "quit", "Quit"),
             Binding("r", "refresh", "Refresh"),
+            Binding("shift+r", "reset", "Complete Reset"),
             Binding("ctrl+c", "quit", "Quit"),
             Binding("f", "toggle_filter", "Filter (TODO)"),
             Binding("space", "toggle_freeze", "Freeze/Unfreeze Display"),
@@ -531,8 +527,8 @@ try:
             if self.status_display:
                 current_text = str(self.status_display.renderable)
                 self.status_display.update(f"{current_text} [REFRESHED]")
-                # Reset after 2 seconds
-                self.call_later(2.0, lambda: self.update_display())
+                # Reset after 2 seconds - lambda needs to accept the event parameter
+                self.call_later(lambda _: self.update_display(), 2.0)
             
         async def action_toggle_filter(self) -> None:
             """Toggle filter (placeholder for future implementation)"""
@@ -540,7 +536,45 @@ try:
             if self.status_display:
                 current_text = str(self.status_display.renderable)
                 self.status_display.update(f"{current_text} [Filter: Coming Soon]")
-                self.call_later(3.0, lambda: self.update_display())
+                # Reset after 3 seconds - lambda needs to accept the event parameter
+                self.call_later(lambda _: self.update_display(), 3.0)
+                
+        async def action_reset(self) -> None:
+            """Complete reset - clears all data and traffic history"""
+            # Unfreeze if frozen
+            if self.frozen:
+                self.frozen = False
+                self.frozen_timestamp = None
+            
+            # Clear all connection tracking
+            self.active_connections.clear()
+            self.new_connections.clear()
+            self.closed_connections.clear()
+            
+            # Reset traffic monitoring
+            if self.traffic_monitor:
+                self.traffic_monitor.connections_traffic.clear()
+                self.traffic_monitor.prev_connections.clear()
+                self.traffic_monitor.traffic_history.clear()
+                self.traffic_monitor.conn_counters.clear()
+            
+            # Clear DNS cache
+            if self.dns_resolver:
+                self.dns_resolver.cache.clear()
+                
+            # Clear table
+            if self.connection_table:
+                self.connection_table.clear()
+                
+            # Load fresh data
+            await self.refresh_data()
+            
+            # Show reset confirmation
+            if self.status_display:
+                current_text = str(self.status_display.renderable)
+                self.status_display.update(f"{current_text} [COMPLETE RESET]")
+                # Reset after 3 seconds
+                self.call_later(lambda _: self.update_display(), 3.0)
                 
         async def action_toggle_freeze(self) -> None:
             """Toggle freeze state - SPACE key functionality"""

@@ -63,10 +63,10 @@ try:
                 
             self.add_column("PID", width=8)              # Prozess-ID
             self.add_column("Program", width=18)         # Programmname  
-            self.add_column("Local IP", width=40)        # Lokale IP (IPv6-kompatibel)
-            self.add_column("Local Port", width=11)      # Lokaler Port
-            self.add_column("Remote IP", width=40)       # Remote IP (IPv6-kompatibel)
-            self.add_column("Remote Port", width=11)     # Remote Port
+            self.add_column("Local IP", width=39)        # Lokale IP (IPv6-kompatibel)
+            self.add_column("Local Port", width=6)       # Lokaler Port
+            self.add_column("Remote IP", width=39)       # Remote IP (IPv6-kompatibel)
+            self.add_column("Remote Port", width=6)      # Remote Port
             self.add_column("Dir", width=4)              # Richtung (→/←)
             self.add_column("Security", width=12)        # Sicherheitsstatus
             self.add_column("Traffic (in)", width=9)     # Eingehender Traffic
@@ -112,12 +112,22 @@ try:
         def __init__(self, **kwargs):
             super().__init__("Initializing...", **kwargs)
             
-        def update_status(self, active: int, new: int, closed: int, suspicious: int = 0, traffic_enabled: bool = False):
+        def update_status(self, active: int, new: int, closed: int, suspicious: int = 0, traffic_enabled: bool = False, frozen: bool = False, frozen_time: str = ""):
             """Update status text with more information"""
             security_info = f" | Suspicious: {suspicious}" if suspicious > 0 else ""
             traffic_info = " | Traffic: ON" if traffic_enabled else ""
-            text = (f"Active: {active} | New: {new} | Closed: {closed}{security_info}{traffic_info} | "
-                   f"Navigation: ↑/↓ rows, PgUp/PgDn pages | q=quit, r=refresh")
+            freeze_info = f" | 🔒 FROZEN at {frozen_time}" if frozen else ""
+            freeze_controls = " | SPACE=freeze/unfreeze" if not frozen else " | SPACE=unfreeze"
+            
+            text = (f"Active: {active} | New: {new} | Closed: {closed}{security_info}{traffic_info}{freeze_info} | "
+                   f"Navigation: ↑/↓ rows, PgUp/PgDn pages{freeze_controls} | q=quit, r=refresh")
+            
+            # Change CSS class based on frozen state
+            if frozen:
+                self.add_class("frozen")
+            else:
+                self.remove_class("frozen")
+                
             # Force update the content
             self.update(text)
             # Refresh the widget to ensure it displays
@@ -139,6 +149,11 @@ try:
             color: $text;
             padding: 0 1;
         }
+        
+        StatusDisplay.frozen {
+            background: $warning;
+            color: $text-muted;
+        }
         """
         
         TITLE = "WTFCalls - Interactive Network Monitor"
@@ -149,12 +164,17 @@ try:
             Binding("r", "refresh", "Refresh"),
             Binding("ctrl+c", "quit", "Quit"),
             Binding("f", "toggle_filter", "Filter (TODO)"),
+            Binding("space", "toggle_freeze", "Freeze/Unfreeze Display"),
         ]
         
         def __init__(self, config: dict, **kwargs):
             super().__init__(**kwargs)
             self.config = config
             self.refresh_interval = config.get('poll_interval', 1.0)
+            
+            # Freeze functionality
+            self.frozen = False
+            self.frozen_timestamp = None
             
             # Initialize monitoring components
             self.dns_resolver = DNSResolver(enable_resolution=not config.get('show_ip', False))
@@ -193,7 +213,7 @@ try:
             # Set initial status
             if self.status_display:
                 traffic_enabled = self.config.get('traffic', False) or self.traffic_monitor is not None
-                self.status_display.update_status(0, 0, 0, 0, traffic_enabled)
+                self.status_display.update_status(0, 0, 0, 0, traffic_enabled, False, "")
             
             # Initial data load
             await self.refresh_data()
@@ -202,9 +222,13 @@ try:
             self.set_interval(self.refresh_interval, self.refresh_data)
             
         async def refresh_data(self) -> None:
-            """Refresh connection data"""
+            """Refresh connection data - respects freeze state"""
             try:
-                await self.update_connections()
+                # Skip data updates if frozen
+                if not self.frozen:
+                    await self.update_connections()
+                    
+                # Always update display (to refresh status bar and handle frozen state)
                 self.update_display()
             except Exception as e:
                 # Show error in status instead of popup
@@ -331,12 +355,21 @@ try:
             # Always update status, even if no connections
             try:
                 traffic_enabled = self.config.get('traffic', False) or self.traffic_monitor is not None
+                
+                # Format frozen timestamp if available
+                frozen_time = ""
+                if self.frozen and self.frozen_timestamp:
+                    import time
+                    frozen_time = time.strftime("%H:%M:%S", time.localtime(self.frozen_timestamp))
+                
                 self.status_display.update_status(
                     len(filtered_active),
                     new_count,
                     closed_count,
                     suspicious_count,
-                    traffic_enabled
+                    traffic_enabled,
+                    self.frozen,
+                    frozen_time
                 )
             except Exception as e:
                 # Fallback status update
@@ -487,7 +520,12 @@ try:
             self.exit()
             
         async def action_refresh(self) -> None:
-            """Manual refresh"""
+            """Manual refresh - unfreezes if frozen"""
+            if self.frozen:
+                # Unfreeze on manual refresh
+                self.frozen = False
+                self.frozen_timestamp = None
+                
             await self.refresh_data()
             # Show refresh in status instead of popup
             if self.status_display:
@@ -503,6 +541,23 @@ try:
                 current_text = str(self.status_display.renderable)
                 self.status_display.update(f"{current_text} [Filter: Coming Soon]")
                 self.call_later(3.0, lambda: self.update_display())
+                
+        async def action_toggle_freeze(self) -> None:
+            """Toggle freeze state - SPACE key functionality"""
+            import time
+            
+            if self.frozen:
+                # Unfreeze
+                self.frozen = False
+                self.frozen_timestamp = None
+                # Force immediate refresh to get latest data
+                await self.refresh_data()
+            else:
+                # Freeze at current time
+                self.frozen = True
+                self.frozen_timestamp = time.time()
+                # Update display to show frozen status
+                self.update_display()
 
     class MinimalInteractiveMonitor:
         """Interactive monitor - now the only and default interface"""

@@ -320,7 +320,11 @@ class ConnectionMonitor:
                 content.append(filter_panel)
             content.append(table)
             content.append(summary)
+<<<<<<< HEAD
             content.append(Text("Press CTRL+C to quit | For interactive mode use --interactive", style=None))
+=======
+            content.append(Text("Press CTRL+C to quit", style=None))
+>>>>>>> 887bdfd9c1949892ad04593caf99d0b4b54feea6
             content.append(Text(f"wtfcalls PID: {my_pid}", style=None))
             
             initial_group = Group(*content)
@@ -359,7 +363,11 @@ class ConnectionMonitor:
                         
                         # Navigation hints und Zusammenfassung
                         content.append(summary)
+<<<<<<< HEAD
                         content.append(Text("Press CTRL+C to quit | For interactive mode use --interactive", style=None))
+=======
+                        content.append(Text("Press CTRL+C to quit", style=None))
+>>>>>>> 887bdfd9c1949892ad04593caf99d0b4b54feea6
                         content.append(Text(f"wtfcalls PID: {my_pid}", style=None))
                         
                         # Update the live display with all content

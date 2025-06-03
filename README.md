@@ -1,26 +1,32 @@
 # WTFCalls
 
-What the Fuck Calls is a robust tool for live monitoring of outgoing network connections.
+<b>W</b>hat <b>T</b>he <b>F</b>uck Calls is a tool for live security and monitoring of network connections and processes.
 
 ## Features
 
-- **Live Connection Monitoring**: Detect and display all outgoing network connections in real-time
-- **Enhanced TUI Interface**: Advanced textual user interface with filtering and multiple views
+- **Live Connection Monitoring**: Detect, filter and display all network connections in real-time
+- **TUI Interface**: Advanced textual user interface with filtering and multiple views
 - **Security Analysis**: Detect potentially suspicious connections based on configurable rules
 - **Traffic Monitoring**: Track data transferred for each connection
 - **Export Capabilities**: Export connection data and security alerts in CSV, JSON, or YAML format
-- **Compatibility**: Works on both Linux and macOS systems
+- **Compatibility**: Works on Linux and macOS systems
 
 ## Installation
 
-### Prerequisites
+
+### Basic Installation (OS wide, Not recommended)
 
 Required Python packages:
 ```bash
+pip install --upgrade pip
 pip install psutil rich textual pyyaml ipaddress
+git clone https://github.com/rtulke/wtfcalls.git
+cd wtfcalls
+chmod +x wtfcalls.py
 ```
 
-### Basic Installation
+
+### Basic Installation (virtuall environment)
 
 ```bash
 git clone https://github.com/rtulke/wtfcalls.git
@@ -29,8 +35,9 @@ chmod +x wtfcalls.py
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install .
+pip install -r requirements.txt
 ```
+
 
 ## Usage
 

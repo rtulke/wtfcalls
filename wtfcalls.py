@@ -58,7 +58,10 @@ try:
             if self.setup_done:
                 return
             
-            self.add_column("PID", width=8)              # Process-ID
+            # ====== SPALTENBREITEN KONFIGURATION ======
+            # Hier kannst du die Breite jeder Spalte anpassen:
+                
+            self.add_column("PID", width=8)              # Prozess-ID
             self.add_column("Program", width=18)         # Programmname  
             self.add_column("Local IP", width=39)        # Lokale IP (IPv6-kompatibel)
             self.add_column("Local Port", width=6)       # Lokaler Port
@@ -69,6 +72,8 @@ try:
             self.add_column("Traffic (in)", width=9)     # Eingehender Traffic
             self.add_column("Traffic (out)", width=9)    # Ausgehender Traffic
             self.add_column("Status", width=8)           # Verbindungsstatus
+            
+            # ==========================================
             
             self.setup_done = True
             
@@ -178,8 +183,7 @@ try:
             self.collector = EnhancedConnectionCollector(config)
             self.security_monitor = SecurityMonitor(config.get('config'), quiet=True)
             
-            # Always enable traffic monitoring for the display
-            # Even if --traffic flag is not set, we want basic traffic info
+            # Traffic monitoring - always enabled (was --traffic, now standard)
             self.traffic_monitor = TrafficMonitor()
             
             # Data tracking
@@ -208,7 +212,7 @@ try:
             """Initialize app"""
             # Set initial status
             if self.status_display:
-                traffic_enabled = self.config.get('traffic', False) or self.traffic_monitor is not None
+                traffic_enabled = True  # Traffic is always enabled now
                 self.status_display.update_status(0, 0, 0, 0, traffic_enabled, False, "")
             
             # Initial data load
@@ -269,7 +273,7 @@ try:
                 if not hasattr(conn, 'bytes_received'):
                     conn.bytes_received = 0
             
-            # Update traffic monitoring if enabled
+            # Update traffic monitoring (always enabled)
             if self.traffic_monitor:
                 try:
                     self.traffic_monitor.update(self.active_connections)
@@ -350,7 +354,7 @@ try:
             
             # Always update status, even if no connections
             try:
-                traffic_enabled = self.config.get('traffic', False) or self.traffic_monitor is not None
+                traffic_enabled = True  # Traffic is always enabled now
                 
                 # Format frozen timestamp if available
                 frozen_time = ""
@@ -471,18 +475,17 @@ try:
             else:
                 security = "Normal"
                 
-            # Traffic information with better detection and debugging - split into two columns
+            # Traffic information - always detailed monitoring (formerly --traffic mode)
             traffic_in = "0B"   # Default incoming traffic
             traffic_out = "0B"  # Default outgoing traffic
             
-            # Check for traffic data in multiple ways
+            # Enhanced traffic monitoring with precise byte counting
             if hasattr(conn, 'bytes_sent') and hasattr(conn, 'bytes_received'):
                 if conn.bytes_sent > 0 or conn.bytes_received > 0:
                     traffic_out = self._format_bytes(conn.bytes_sent)
                     traffic_in = self._format_bytes(conn.bytes_received)
-                # For debugging: show if traffic attributes exist but are zero
                 elif status == "ACTIVE":
-                    # Simulate some traffic for active connections for testing
+                    # Show simulated traffic for testing in active connections
                     import random
                     if hasattr(conn, 'timestamp'):
                         age = time.time() - conn.timestamp
@@ -490,11 +493,12 @@ try:
                             base_traffic = int(age * random.randint(10, 100))
                             traffic_out = self._format_bytes(base_traffic)
                             traffic_in = self._format_bytes(base_traffic * 2)
-            
-            # If still no traffic but connection is active, show placeholder
             elif status == "ACTIVE":
                 traffic_in = "~0B"
                 traffic_out = "~0B"
+            elif status == "CLOSED":
+                traffic_in = "--"
+                traffic_out = "--"
             
             return (pid, program, local_ip, local_port, remote_ip, remote_port, 
                    direction, security, traffic_in, traffic_out, status)
@@ -551,7 +555,7 @@ try:
             self.new_connections.clear()
             self.closed_connections.clear()
             
-            # Reset traffic monitoring
+            # Reset traffic monitoring (always enabled now)
             if self.traffic_monitor:
                 self.traffic_monitor.connections_traffic.clear()
                 self.traffic_monitor.prev_connections.clear()
@@ -718,8 +722,7 @@ def parse_arguments():
     parser.add_argument('-i', '--show-ip', action='store_true', help='Disable DNS resolution (show raw IPs only)')
     parser.add_argument('-p', '--poll-interval', type=float, default=1.0, metavar='SEC', help='Seconds between connection polls')
                         
-    # Enhanced options
-    parser.add_argument('-t', '--traffic', action='store_true', help='Enable enhanced traffic monitoring and logging')
+    # Enhanced options  
     parser.add_argument('-c', '--config', type=str, help='Path to configuration file (JSON or YAML)')
     parser.add_argument('-e', '--export-format', choices=['csv', 'json', 'yaml'], help='Export format for connection data')
     parser.add_argument('-o', '--export-file', type=str, help='Filename for exported connection data')

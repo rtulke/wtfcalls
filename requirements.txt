@@ -3,3 +3,6 @@ mdurl==0.1.2
 psutil==7.0.0
 Pygments==2.19.1
 rich==14.0.0
+textual>=0.50.0
+pyyaml>=5.4.1
+ipaddress>=1.0.23

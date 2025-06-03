@@ -17,7 +17,15 @@ class DNSResolver:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.enable_resolution = enable_resolution
         self.pending_futures = {}  # IP -> Future
-        
+
+    def _cleanup_completed_futures(self) -> None:
+        """Remove completed futures from pending list"""
+        completed = [ip for ip, future in list(self.pending_futures.items()) 
+                    if future.done()]
+        for ip in completed:
+            self.pending_futures.pop(ip, None)        
+
+
     def resolve(self, ip: str) -> str:
         """Resolve IP address to hostname, using cache if available"""
         if not self.enable_resolution:
@@ -26,14 +34,17 @@ class DNSResolver:
         if ip in self.cache:
             return self.cache[ip]
             
-        # If resolution is already in progress, return the IP for now
+        # Check and clean completed futures before adding new ones
+        #self._cleanup_completed_futures()
+            
         if ip in self.pending_futures:
             return ip
             
-        # Start asynchronous resolution
         future = self.executor.submit(self._resolve_dns, ip)
         self.pending_futures[ip] = future
         return ip
+    
+
         
     def _resolve_dns(self, ip: str) -> str:
         """Perform actual DNS resolution"""

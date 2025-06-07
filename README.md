@@ -62,50 +62,35 @@ Run the basic monitoring interface:
 ./wtfcalls.py
 ```
 
-### Enhanced Usage
-
-Run with additional features:
-
-```bash
-./wtfcalls.py --traffic --security --split-port
-```
-
-### TUI Interface
-
-Run the enhanced TUI interface:
-
-```bash
-./wtfcalls_tui.py
-```
-
 ### Command Line Options
 
 ```
-usage: wtfcalls.py [-h] [--ipv4] [--ipv6] [--delay-closed SEC] [--delay-new SEC] [--no-resolve] [--split-port] [--poll-interval SEC] [--full-path]
-                  [--traffic] [--security] [--security-config SECURITY_CONFIG] [--export-format {csv,json,yaml}] [--export-file EXPORT_FILE]
-                  [--export-alerts EXPORT_ALERTS] [--filter-process FILTER_PROCESS] [--filter-port FILTER_PORT] [--filter-ip FILTER_IP]
+usage: wtfcalls.py [-h] [-4] [-6] [-d SEC] [-n SEC] [-i] [-p SEC] [-c CONFIG] [-e {csv,json,yaml}] [-o EXPORT_FILE] [-a EXPORT_ALERTS] [-q] [-fp FILTER_PROCESS] [-fn FILTER_NAME]
+                   [-ft FILTER_PORT] [-fi FILTER_IP] [-fa FILTER_ALERT [FILTER_ALERT ...]] [-fc {in,out}] [--debug]
 
-wtfcalls: Monitor outgoing network connections
+wtfcalls: Interactive Network Connection Monitor
 
 options:
-  -h, --help                  show this help message and exit
-  --ipv4                      Show only IPv4 connections
-  --ipv6                      Show only IPv6 connections
-  --delay-closed SEC          Seconds to keep closed connections displayed (default: 10)
-  --delay-new SEC             Seconds to highlight new connections (default: 10)
-  --no-resolve                Disable DNS resolution (show raw IPs only)
-  --split-port                Split IP and port into separate columns
-  --poll-interval SEC         Seconds between connection polls (default: 1.0)
-  --full-path                 Show full executable path for processes
-  --traffic                   Enable traffic monitoring
-  --security                  Enable security monitoring
-  --security-config FILE      Path to security configuration file (JSON or YAML)
-  --export-format {csv,json,yaml}  Export format for connection data
-  --export-file FILE          Filename for exported connection data
-  --export-alerts FILE        Filename for exported security alerts
-  --filter-process FILTER     Filter connections by process name (case-insensitive)
-  --filter-port PORT          Filter connections by remote port
-  --filter-ip IP              Filter connections by remote IP address
+  -h, --help                              Show this help message and exit
+  -4, --ipv4                              Show only IPv4 connections (default: False)
+  -6, --ipv6                              Show only IPv6 connections (default: False)
+  -d, --delay-closed SEC                  Seconds to keep closed connections displayed (default: 10)
+  -n, --delay-new SEC                     Seconds to highlight new connections (default: 10)
+  -i, --show-ip                           Disable DNS resolution (show raw IPs only) (default: False)
+  -p, --poll-interval SEC                 Seconds between connection polls (default: 1.0)
+  -c, --config CONFIG                     Path to configuration file (JSON or YAML) (default: None)
+  -e, --export-format {csv,json,yaml}     Export format for connection data (default: None)
+  -o, --export-file EXPORT_FILE           Filename for exported connection data (default: None)
+  -a, --export-alerts EXPORT_ALERTS       Filename for exported security alerts (default: None)
+  -q, --quiet                             Suppress console warnings and only show the table (default: False)
+  -fp, --filter-process FILTER_PROCESS    Filter connections by process IDs (comma-separated, supports ranges, e.g. "1-500,3330") (default: None)
+  -fn, --filter-name FILTER_NAME          Filter connections by program names (comma-separated) (default: None)
+  -ft, --filter-port FILTER_PORT          Filter connections by remote ports (comma-separated, supports ranges, e.g. "80,443,8000-8999") (default: None)
+  -fi, --filter-ip FILTER_IP              Filter connections by remote IP addresses (comma-separated, supports CIDR notation, e.g. "192.168.1.0/24,10.0.0.1") (default: None)
+  -fa, --filter-alert FILTER_ALERT [FILTER_ALERT ...]
+                                          Filter connections by alert type (e.g., suspicious malicious trusted) (default: None)
+  -fc, --filter-connection {in,out}       Filter connections by direction (in=inbound, out=outbound) (default: None)
+  --debug                                 Show debug window for troubleshooting (default: False)
 ```
 
 ## Project Structure

@@ -21,13 +21,23 @@
 
 Required Python packages:
 ```bash
+su - root
 pip install --upgrade pip
 pip install psutil rich textual pyyaml ipaddress
 git clone https://github.com/rtulke/wtfcalls.git
 cd wtfcalls
 chmod +x wtfcalls.py
 ```
+### Basic Installation (Debian based OS)
 
+Required Python packages:
+```bash
+su - root
+apt install python3-psutil python3-rich python3-textual python3-yaml -y
+git clone https://github.com/rtulke/wtfcalls.git
+cd wtfcalls
+chmod +x wtfcalls.py
+```
 
 ### Basic Installation (virtuall environment)
 

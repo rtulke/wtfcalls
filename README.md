@@ -151,9 +151,3 @@ Run with the security configuration:
 ## License
 
 This project is licensed under the GPLv3 License.
-
-## Acknowledgements
-
-- [psutil](https://github.com/giampaolo/psutil) - Cross-platform process and system monitoring
-- [Rich](https://github.com/Textualize/rich) - Terminal formatting 
-- [Textual](https://github.com/Textualize/textual) - TUI framework

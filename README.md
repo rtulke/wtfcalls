@@ -145,7 +145,7 @@ custom_rules:
 Run with the security configuration:
 
 ```bash
-./wtfcalls.py --security --security-config security_config.yaml
+./wtfcalls.py --security-config security_config.yaml
 ```
 
 ## License

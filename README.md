@@ -2,6 +2,9 @@
 
 <b>W</b>hat <b>T</b>he <b>F</b>uck Calls is a tool for live security and monitoring of network connections and processes.
 
+![Example](/demo/wtfcalls.png)
+
+
 ## Features
 
 - **Live Connection Monitoring**: Detect, filter and display all network connections in real-time
